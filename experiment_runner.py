@@ -22,6 +22,8 @@ class ExperimentConfig:
     use_amp: bool = True
     save_every: int = 10
     run_root: str = "runs"
+    epoch_log_every: int = 10
+    show_epoch_progress: bool = True
 
 
 def build_run_dir(config: ExperimentConfig) -> Path:
@@ -51,12 +53,14 @@ def train_one_epoch(
     device: torch.device,
     use_amp: bool,
     scaler: Optional[torch.cuda.amp.GradScaler],
+    progress_bar: Optional[tqdm] = None,
+    epoch: Optional[int] = None,
+    num_epochs: Optional[int] = None,
 ) -> float:
     model.train()
     total = 0.0
 
-    pbar = tqdm(loader, desc="train", leave=False)
-    for batch in pbar:
+    for batch in loader:
         points = batch["points"].to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
 
@@ -73,7 +77,15 @@ def train_one_epoch(
             optimizer.step()
 
         total += loss.item()
-        pbar.set_postfix(loss=f"{loss.item():.6f}")
+        if progress_bar is not None:
+            progress_bar.update(1)
+            postfix = {
+                "phase": "train",
+                "loss": f"{loss.item():.6f}",
+            }
+            if epoch is not None and num_epochs is not None:
+                postfix["epoch"] = f"{epoch}/{num_epochs}"
+            progress_bar.set_postfix(postfix)
 
     return total / max(1, len(loader))
 
@@ -84,20 +96,30 @@ def validate_one_epoch(
     loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     device: torch.device,
     use_amp: bool,
+    progress_bar: Optional[tqdm] = None,
+    epoch: Optional[int] = None,
+    num_epochs: Optional[int] = None,
 ) -> float:
     model.eval()
     total = 0.0
 
     with torch.no_grad():
-        pbar = tqdm(loader, desc="val", leave=False)
-        for batch in pbar:
+        for batch in loader:
             points = batch["points"].to(device, non_blocking=True)
             with torch.amp.autocast(device_type="cuda", enabled=use_amp):
                 recon, _ = model(points)
                 loss = loss_fn(recon, points)
 
             total += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.6f}")
+            if progress_bar is not None:
+                progress_bar.update(1)
+                postfix = {
+                    "phase": "val",
+                    "loss": f"{loss.item():.6f}",
+                }
+                if epoch is not None and num_epochs is not None:
+                    postfix["epoch"] = f"{epoch}/{num_epochs}"
+                progress_bar.set_postfix(postfix)
 
     return total / max(1, len(loader))
 
@@ -179,82 +201,138 @@ def run_training(
 
     best_val = float("inf")
     best_epoch = -1
+    log_every = max(1, config.epoch_log_every)
 
-    for epoch in range(1, config.num_epochs + 1):
-        train_loss = train_one_epoch(
-            model=model,
-            loader=train_loader,
-            optimizer=optimizer,
-            loss_fn=loss_fn,
-            device=device_obj,
-            use_amp=use_amp,
-            scaler=scaler,
+    # W&B qualitative logging defaults (kept outside ExperimentConfig by design)
+    log_val_reconstructions = True
+    recon_every = 10
+    recon_num_batches = 1
+    recon_n_cols = 8
+    recon_max_samples = 16
+
+    total_steps = config.num_epochs * (len(train_loader) + len(val_loader))
+    global_pbar = None
+    if config.show_epoch_progress:
+        global_pbar = tqdm(
+            total=total_steps,
+            desc=f"train:{config.name}",
+            leave=True,
         )
-        val_loss = validate_one_epoch(
-            model=model,
-            loader=val_loader,
-            loss_fn=loss_fn,
-            device=device_obj,
-            use_amp=use_amp,
-        )
 
-        append_metrics(run_dir / "metrics.csv", epoch, train_loss, val_loss)
+    try:
+        for epoch in range(1, config.num_epochs + 1):
 
-        if val_loss < best_val:
-            best_val = val_loss
-            best_epoch = epoch
-            save_checkpoint(
-                run_dir / "checkpoints" / "best.pt",
-                model,
-                optimizer,
-                epoch,
-                best_val,
-                config,
+            train_loss = train_one_epoch(
+                model=model,
+                loader=train_loader,
+                optimizer=optimizer,
+                loss_fn=loss_fn,
+                device=device_obj,
+                use_amp=use_amp,
+                scaler=scaler,
+                progress_bar=global_pbar,
+                epoch=epoch,
+                num_epochs=config.num_epochs,
+            )
+            val_loss = validate_one_epoch(
+                model=model,
+                loader=val_loader,
+                loss_fn=loss_fn,
+                device=device_obj,
+                use_amp=use_amp,
+                progress_bar=global_pbar,
+                epoch=epoch,
+                num_epochs=config.num_epochs,
             )
 
-        if config.save_every > 0 and epoch % config.save_every == 0:
-            save_checkpoint(
-                run_dir / "checkpoints" / f"epoch_{epoch:04d}.pt",
-                model,
-                optimizer,
-                epoch,
-                best_val,
-                config,
-            )
+            append_metrics(run_dir / "metrics.csv", epoch, train_loss, val_loss)
+
+            if val_loss < best_val:
+                best_val = val_loss
+                best_epoch = epoch
+                save_checkpoint(
+                    run_dir / "checkpoints" / "best.pt",
+                    model,
+                    optimizer,
+                    epoch,
+                    best_val,
+                    config,
+                )
+
+            if config.save_every > 0 and epoch % config.save_every == 0:
+                save_checkpoint(
+                    run_dir / "checkpoints" / f"epoch_{epoch:04d}.pt",
+                    model,
+                    optimizer,
+                    epoch,
+                    best_val,
+                    config,
+                )
+
+            metrics = {
+                "epoch": epoch,
+                "train/loss": train_loss,
+                "val/loss": val_loss,
+                "val/best": best_val,
+            }
+
+            if (
+                wandb_run is not None
+                and log_val_reconstructions
+                and epoch % recon_every == 0
+            ):
+                try:
+                    import matplotlib.pyplot as plt
+                    import wandb  # type: ignore
+
+                    from visualize import make_reconstruction_figure
+
+                    fig = make_reconstruction_figure(
+                        model=model,
+                        loader=val_loader,
+                        device=device_obj,
+                        num_batches=max(1, recon_num_batches),
+                        n_cols=max(1, recon_n_cols),
+                        max_samples=recon_max_samples,
+                    )
+                    metrics["val/reconstruction"] = wandb.Image(fig, caption=f"epoch={epoch}")
+                    plt.close(fig)
+                except Exception as exc:
+                    tqdm.write(f"[{config.name}] skipped val reconstruction logging at epoch {epoch}: {exc}")
+
+            if wandb_run is not None:
+                wandb_run.log(metrics)
+
+            should_log = (epoch % log_every == 0) or (epoch == config.num_epochs)
+            if should_log:
+                tqdm.write(
+                    f"[{config.name}] epoch {epoch}/{config.num_epochs} "
+                    f"train {train_loss:.6f} val {val_loss:.6f} best {best_val:.6f}"
+                )
+
+        save_checkpoint(
+            run_dir / "checkpoints" / "last.pt",
+            model,
+            optimizer,
+            config.num_epochs,
+            best_val,
+            config,
+        )
+
+        summary = {
+            "best_val": best_val,
+            "best_epoch": best_epoch,
+        }
+        save_json(run_dir / "summary.json", summary)
 
         if wandb_run is not None:
-            wandb_run.log(
-                {
-                    "epoch": epoch,
-                    "train/loss": train_loss,
-                    "val/loss": val_loss,
-                    "val/best": best_val,
-                }
-            )
+            wandb_run.summary["best_val"] = best_val
+            wandb_run.summary["best_epoch"] = best_epoch
 
-        print(
-            f"[{config.name}] epoch {epoch:03d}/{config.num_epochs} "
-            f"train {train_loss:.6f} val {val_loss:.6f} best {best_val:.6f}"
-        )
+        return run_dir, summary
+    finally:
+        if global_pbar is not None:
+            global_pbar.close()
 
-    save_checkpoint(
-        run_dir / "checkpoints" / "last.pt",
-        model,
-        optimizer,
-        config.num_epochs,
-        best_val,
-        config,
-    )
-
-    summary = {
-        "best_val": best_val,
-        "best_epoch": best_epoch,
-    }
-    save_json(run_dir / "summary.json", summary)
-
-    if wandb_run is not None:
-        wandb_run.summary["best_val"] = best_val
-        wandb_run.summary["best_epoch"] = best_epoch
-        wandb_run.finish()
-
-    return run_dir, summary
+        if wandb_run is not None:
+            wandb_run.finish()
