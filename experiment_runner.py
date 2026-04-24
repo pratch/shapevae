@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import getpass
 import json
 import os
 from dataclasses import asdict, dataclass
@@ -26,10 +27,19 @@ class ExperimentConfig:
     show_epoch_progress: bool = True
 
 
+def _safe_path_token(value: str) -> str:
+    token = "".join(ch if ch.isalnum() or ch in "-._" else "_" for ch in value)
+    token = token.strip("._")
+    return token or "unknown"
+
+
 def build_run_dir(config: ExperimentConfig) -> Path:
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_name = f"{ts}_{config.name}"
-    run_dir = Path(config.run_root) / run_name
+    username = _safe_path_token(getpass.getuser())
+    exp_name = _safe_path_token(config.name)
+    run_name = f"{ts}_{username}_{exp_name}"
+    run_root = Path(os.path.expandvars(config.run_root)).expanduser()
+    run_dir = run_root / run_name
     (run_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
     return run_dir
 
