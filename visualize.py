@@ -144,6 +144,14 @@ def make_reconstruction_figure(
         p_in = points_np[i]
         p_out = recon_np[i]
 
+        # set axis limits to be based on gt points
+        xmin, ymin, zmin = p_in.min(axis=0)
+        xmax, ymax, zmax = p_in.max(axis=0)
+
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(zmin, zmax)  # because y-axis uses p[:, 2]
+        ax.set_zlim(ymin, ymax)  # because z-axis uses p[:, 1]
+
         ax.scatter(
             p_in[:, 0],
             p_in[:, 2],

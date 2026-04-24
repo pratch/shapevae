@@ -14,6 +14,10 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+import matplotlib.pyplot as plt
+import wandb  
+from visualize import make_reconstruction_figure
+
 
 @dataclass
 class ExperimentConfig:
@@ -168,13 +172,11 @@ def init_wandb(config: ExperimentConfig):
         return None
 
     try:
-        import wandb  # type: ignore
-
         run = wandb.init(
             project="shapevae",
             name=config.name,
             config=asdict(config),
-            reinit=True,
+            # reinit=True,
         )
         return run
     except Exception:
@@ -289,13 +291,9 @@ def run_training(
             if (
                 wandb_run is not None
                 and log_val_reconstructions
-                and epoch % recon_every == 0
+                and (epoch % recon_every == 0 or epoch == 1)  
             ):
                 try:
-                    import matplotlib.pyplot as plt
-                    import wandb  # type: ignore
-
-                    from visualize import make_reconstruction_figure
 
                     fig = make_reconstruction_figure(
                         model=model,
@@ -311,7 +309,7 @@ def run_training(
                     tqdm.write(f"[{config.name}] skipped val reconstruction logging at epoch {epoch}: {exc}")
 
             if wandb_run is not None:
-                wandb_run.log(metrics)
+                wandb_run.log(metrics, step=epoch)
 
             should_log = (epoch % log_every == 0) or (epoch == config.num_epochs)
             if should_log:
