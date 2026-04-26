@@ -38,11 +38,6 @@ def _decode_latents(model: torch.nn.Module, latents: torch.Tensor) -> torch.Tens
     raise ValueError("Model does not expose decode() or decoder for latent interpolation")
 
 
-def _bicubic_ease(t: np.ndarray) -> np.ndarray:
-    # Smoothstep easing gives smoother transitions than linear weights.
-    return t * t * (3.0 - 2.0 * t)
-
-
 def _build_2d_latent_grid(
     z00: torch.Tensor,
     z10: torch.Tensor,
@@ -50,18 +45,11 @@ def _build_2d_latent_grid(
     z11: torch.Tensor,
     rows: int,
     cols: int,
-    mode: str,
     device: torch.device,
 ) -> torch.Tensor:
     u = np.linspace(0.0, 1.0, cols, dtype=np.float32)
     v = np.linspace(0.0, 1.0, rows, dtype=np.float32)
     uu, vv = np.meshgrid(u, v)
-
-    if mode == "bicubic":
-        uu = _bicubic_ease(uu)
-        vv = _bicubic_ease(vv)
-    elif mode != "bilinear":
-        raise ValueError("interp_mode must be either 'bilinear' or 'bicubic'")
 
     wu = torch.from_numpy(uu).to(device=device)
     wv = torch.from_numpy(vv).to(device=device)
@@ -152,7 +140,6 @@ def visualize_interpolations(
     loader: Iterable[dict],
     device: str | torch.device,
     grid_size: int | Tuple[int, int] = 5,
-    interp_mode: str = "bilinear",
     input_color: str = "dodgerblue",
     interp_color: str = "orangered",
     input_alpha: float = 0.85,
@@ -163,7 +150,6 @@ def visualize_interpolations(
         loader=loader,
         device=device,
         grid_size=grid_size,
-        interp_mode=interp_mode,
         input_color=input_color,
         interp_color=interp_color,
         input_alpha=input_alpha,
@@ -283,7 +269,6 @@ def make_interpolation_figure(
     loader: Iterable[dict],
     device: str | torch.device,
     grid_size: int | Tuple[int, int] = 5,
-    interp_mode: str = "bilinear",
     input_color: str = "dodgerblue",
     interp_color: str = "orangered",
     input_alpha: float = 0.85,
@@ -336,7 +321,6 @@ def make_interpolation_figure(
             z11=anchor_z[3],
             rows=rows,
             cols=cols,
-            mode=interp_mode,
             device=device_obj,
         )
         decoded_grid = _decode_latents(model, z_grid)
@@ -392,6 +376,6 @@ def make_interpolation_figure(
         ax.set_axis_off()
         ax.set_box_aspect([1, 1, 1])
 
-    fig.suptitle(f"Latent Interpolation ({interp_mode}, grid={rows}x{cols})", fontsize=12)
+    fig.suptitle(f"Latent Interpolation (grid={rows}x{cols})", fontsize=12)
     plt.subplots_adjust(wspace=0.02, hspace=0.02, top=0.92)
     return fig

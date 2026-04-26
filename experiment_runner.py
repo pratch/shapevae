@@ -224,7 +224,6 @@ def run_training(
     log_val_interpolations = True
     interp_every = 10
     interp_grid_size = 5
-    interp_mode = "bilinear"
 
     total_steps = config.num_epochs * (len(train_loader) + len(val_loader))
     global_pbar = None
@@ -323,11 +322,10 @@ def run_training(
                         loader=val_loader,
                         device=device_obj,
                         grid_size=interp_grid_size,
-                        interp_mode=interp_mode,
                     )
                     metrics["val/interpolation"] = wandb.Image(
                         interp_fig,
-                        caption=f"epoch={epoch}, mode={interp_mode}, grid={interp_grid_size}x{interp_grid_size}",
+                        caption=f"epoch={epoch}, grid={interp_grid_size}x{interp_grid_size}",
                     )
                     plt.close(interp_fig)
                 except Exception as exc:
