@@ -45,7 +45,7 @@ def build_diverse_anchor_loader(
 
     min_dist_to_selected = torch.full((n_items,), float("inf"), dtype=torch.float32)
 
-    iterator_factory = range
+    iterator_factory = lambda x: x
     if show_progress:
         from tqdm.auto import tqdm
 
