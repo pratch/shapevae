@@ -3,7 +3,7 @@
 ## TODO
 
 ### Encoder
-- [ ] Point AE (PTv3 / Transformer)
+- [/] Point AE (PTv3 as encoder, MLP as decoder, loss: CD/repulsion, flag for AE or VAE) ```ptv3_based_model.py```
 
 ### Decoder
 - [ ] Predict Occupancy (Pratch)
@@ -12,7 +12,7 @@
 - [ ] VAE, β-VAE 
 
 ### Experiments
-- [ ] Latent interpolation
-      - CLIP-guided axes?
+- [ in progress ] Latent interpolation
+  - CLIP-guided axes?
 - [ ] Number of pointcloud samples
 - [ ] Latent sizes

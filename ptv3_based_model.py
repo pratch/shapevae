@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import sys
 
-sys.path.insert(0, "../Pointcept")
+sys.path.insert(0, "/home/palakons/Pointcept")  # adjust this path based on your singularity home
 from pointcept.models.point_transformer_v3.point_transformer_v3m1_base import (
     PointTransformerV3,
 )
