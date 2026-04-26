@@ -16,6 +16,7 @@ from tqdm.auto import tqdm
 
 import matplotlib.pyplot as plt
 import wandb
+from utils.interpolation_anchors import build_diverse_anchor_loader
 from visualize import make_interpolation_figure, make_reconstruction_figure
 
 
@@ -224,6 +225,26 @@ def run_training(
     log_val_interpolations = True
     interp_every = 10
     interp_grid_size = 5
+    interp_vis_loader = val_loader
+
+    if log_val_interpolations:
+        try:
+            interp_vis_loader, selected_anchor_indices, selected_anchor_ids = build_diverse_anchor_loader(
+                source_loader=val_loader,
+                n_select=4,
+                seed=config.seed,
+                compute_device=device_obj,
+                show_progress=False,
+            )
+            tqdm.write(
+                f"[{config.name}] interpolation anchors selected: "
+                f"idx={selected_anchor_indices}, ids={selected_anchor_ids}"
+            )
+        except Exception as exc:
+            tqdm.write(
+                f"[{config.name}] failed to build diverse interpolation anchors; "
+                f"falling back to val_loader: {exc}"
+            )
 
     total_steps = config.num_epochs * (len(train_loader) + len(val_loader))
     global_pbar = None
@@ -319,7 +340,7 @@ def run_training(
                 try:
                     interp_fig = make_interpolation_figure(
                         model=model,
-                        loader=val_loader,
+                        loader=interp_vis_loader,
                         device=device_obj,
                         grid_size=interp_grid_size,
                     )

@@ -3,7 +3,7 @@
 ## TODO
 
 ### Encoder
-- [x] Point AE (PTv3 as encoder, MLP as decoder, loss: CD/repulsion, flag for AE or VAE) ```ptv3_based_model.py```
+- [x] Point AE (PTv3 as encoder, MLP as decoder, loss: CD/repulsion, flag for AE or VAE) ```model/ptv3_based_model.py```
 
 ### Decoder
 - [ ] Predict Occupancy (Pratch)
