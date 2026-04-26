@@ -359,6 +359,8 @@ def run_training(
         if wandb_run is not None:
             wandb_run.summary["best_val"] = best_val
             wandb_run.summary["best_epoch"] = best_epoch
+            #log run_dir in W&B summary for easy access
+            wandb_run.summary["run_dir"] = str(run_dir)
 
         return run_dir, summary
     finally:
