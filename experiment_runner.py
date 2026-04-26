@@ -15,8 +15,8 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 import matplotlib.pyplot as plt
-import wandb  
-from visualize import make_reconstruction_figure
+import wandb
+from visualize import make_interpolation_figure, make_reconstruction_figure
 
 
 @dataclass
@@ -221,6 +221,10 @@ def run_training(
     recon_num_batches = 1
     recon_n_cols = 8
     recon_max_samples = 16
+    log_val_interpolations = True
+    interp_every = 10
+    interp_grid_size = 5
+    interp_mode = "bilinear"
 
     total_steps = config.num_epochs * (len(train_loader) + len(val_loader))
     global_pbar = None
@@ -307,6 +311,27 @@ def run_training(
                     plt.close(fig)
                 except Exception as exc:
                     tqdm.write(f"[{config.name}] skipped val reconstruction logging at epoch {epoch}: {exc}")
+
+            if (
+                wandb_run is not None
+                and log_val_interpolations
+                and (epoch % interp_every == 0 or epoch == 1)
+            ):
+                try:
+                    interp_fig = make_interpolation_figure(
+                        model=model,
+                        loader=val_loader,
+                        device=device_obj,
+                        grid_size=interp_grid_size,
+                        interp_mode=interp_mode,
+                    )
+                    metrics["val/interpolation"] = wandb.Image(
+                        interp_fig,
+                        caption=f"epoch={epoch}, mode={interp_mode}, grid={interp_grid_size}x{interp_grid_size}",
+                    )
+                    plt.close(interp_fig)
+                except Exception as exc:
+                    tqdm.write(f"[{config.name}] skipped val interpolation logging at epoch {epoch}: {exc}")
 
             if wandb_run is not None:
                 wandb_run.log(metrics, step=epoch)

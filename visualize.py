@@ -12,6 +12,76 @@ def _to_numpy(points: torch.Tensor | np.ndarray) -> np.ndarray:
     return points
 
 
+def _encode_points(model: torch.nn.Module, points: torch.Tensor) -> torch.Tensor:
+    if hasattr(model, "encode") and callable(model.encode):
+        encoded = model.encode(points)
+        if isinstance(encoded, tuple):
+            return encoded[0]
+        return encoded
+
+    if hasattr(model, "encoder") and callable(model.encoder):
+        return model.encoder(points)
+
+    out = model(points)
+    if isinstance(out, tuple) and len(out) >= 2:
+        return out[1]
+    raise ValueError("Unable to extract latent codes from model")
+
+
+def _decode_latents(model: torch.nn.Module, latents: torch.Tensor) -> torch.Tensor:
+    if hasattr(model, "decode") and callable(model.decode):
+        return model.decode(latents)
+
+    if hasattr(model, "decoder") and callable(model.decoder):
+        return model.decoder(latents)
+
+    raise ValueError("Model does not expose decode() or decoder for latent interpolation")
+
+
+def _bicubic_ease(t: np.ndarray) -> np.ndarray:
+    # Smoothstep easing gives smoother transitions than linear weights.
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _build_2d_latent_grid(
+    z00: torch.Tensor,
+    z10: torch.Tensor,
+    z01: torch.Tensor,
+    z11: torch.Tensor,
+    rows: int,
+    cols: int,
+    mode: str,
+    device: torch.device,
+) -> torch.Tensor:
+    u = np.linspace(0.0, 1.0, cols, dtype=np.float32)
+    v = np.linspace(0.0, 1.0, rows, dtype=np.float32)
+    uu, vv = np.meshgrid(u, v)
+
+    if mode == "bicubic":
+        uu = _bicubic_ease(uu)
+        vv = _bicubic_ease(vv)
+    elif mode != "bilinear":
+        raise ValueError("interp_mode must be either 'bilinear' or 'bicubic'")
+
+    wu = torch.from_numpy(uu).to(device=device)
+    wv = torch.from_numpy(vv).to(device=device)
+    one = torch.ones_like(wu)
+
+    # Bilinear blend of four corner latents.
+    w00 = (one - wu) * (one - wv)
+    w10 = wu * (one - wv)
+    w01 = (one - wu) * wv
+    w11 = wu * wv
+
+    z_grid = (
+        w00.unsqueeze(-1) * z00.unsqueeze(0).unsqueeze(0)
+        + w10.unsqueeze(-1) * z10.unsqueeze(0).unsqueeze(0)
+        + w01.unsqueeze(-1) * z01.unsqueeze(0).unsqueeze(0)
+        + w11.unsqueeze(-1) * z11.unsqueeze(0).unsqueeze(0)
+    )
+    return z_grid.view(rows * cols, -1)
+
+
 def plot_pointclouds(
     pc_list: Sequence[Tuple[str, torch.Tensor | np.ndarray]],
     n_cols: int = 4,
@@ -73,6 +143,31 @@ def visualize_reconstructions(
         recon_color=recon_color,
         input_alpha=input_alpha,
         recon_alpha=recon_alpha,
+    )
+    plt.show()
+
+
+def visualize_interpolations(
+    model: torch.nn.Module,
+    loader: Iterable[dict],
+    device: str | torch.device,
+    grid_size: int | Tuple[int, int] = 5,
+    interp_mode: str = "bilinear",
+    input_color: str = "dodgerblue",
+    interp_color: str = "orangered",
+    input_alpha: float = 0.85,
+    interp_alpha: float = 0.85,
+) -> None:
+    fig = make_interpolation_figure(
+        model=model,
+        loader=loader,
+        device=device,
+        grid_size=grid_size,
+        interp_mode=interp_mode,
+        input_color=input_color,
+        interp_color=interp_color,
+        input_alpha=input_alpha,
+        interp_alpha=interp_alpha,
     )
     plt.show()
 
@@ -180,4 +275,123 @@ def make_reconstruction_figure(
     handles, labels = ax.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=2, frameon=False)
     plt.subplots_adjust(wspace=0.02, hspace=0.08, top=0.90)
+    return fig
+
+
+def make_interpolation_figure(
+    model: torch.nn.Module,
+    loader: Iterable[dict],
+    device: str | torch.device,
+    grid_size: int | Tuple[int, int] = 5,
+    interp_mode: str = "bilinear",
+    input_color: str = "dodgerblue",
+    interp_color: str = "orangered",
+    input_alpha: float = 0.85,
+    interp_alpha: float = 0.85,
+):
+    if isinstance(grid_size, int):
+        rows = cols = grid_size
+    else:
+        rows, cols = grid_size
+
+    if rows < 2 or cols < 2:
+        raise ValueError("grid_size must be >= 2 in each dimension")
+
+    device_obj = torch.device(device)
+    collected_points: List[torch.Tensor] = []
+    collected_ids: List[str] = []
+    has_all_ids = True
+
+    loader_iter = iter(loader)
+    while sum(x.shape[0] for x in collected_points) < 4:
+        try:
+            batch = next(loader_iter)
+        except StopIteration:
+            break
+
+        pts = batch["points"]
+        needed = 4 - sum(x.shape[0] for x in collected_points)
+        take = min(needed, pts.shape[0])
+        if take <= 0:
+            break
+
+        collected_points.append(pts[:take])
+        if "object_id" in batch:
+            collected_ids.extend([str(x) for x in batch["object_id"][:take]])
+        else:
+            has_all_ids = False
+
+    if sum(x.shape[0] for x in collected_points) < 4:
+        raise ValueError("Need at least 4 samples from loader for interpolation figure")
+
+    anchor_points = torch.cat(collected_points, dim=0)[:4].to(device_obj)
+
+    model.eval()
+    with torch.no_grad():
+        anchor_z = _encode_points(model, anchor_points)
+        z_grid = _build_2d_latent_grid(
+            z00=anchor_z[0],
+            z10=anchor_z[1],
+            z01=anchor_z[2],
+            z11=anchor_z[3],
+            rows=rows,
+            cols=cols,
+            mode=interp_mode,
+            device=device_obj,
+        )
+        decoded_grid = _decode_latents(model, z_grid)
+
+    decoded_np = decoded_grid.detach().cpu().numpy()
+    anchor_np = anchor_points.detach().cpu().numpy()
+
+    corner_indices = {
+        0: (0, 0),
+        1: (0, cols - 1),
+        2: (rows - 1, 0),
+        3: (rows - 1, cols - 1),
+    }
+    corner_linear = {r * cols + c: idx for idx, (r, c) in corner_indices.items()}
+
+    all_points = [decoded_np[i] for i in range(rows * cols)]
+    xyz_min = np.min(np.concatenate(all_points, axis=0), axis=0)
+    xyz_max = np.max(np.concatenate(all_points, axis=0), axis=0)
+
+    fig = plt.figure(figsize=(2.5 * cols, 2.5 * rows))
+    fig.patch.set_facecolor("white")
+
+    for linear_idx in range(rows * cols):
+        ax = fig.add_subplot(rows, cols, linear_idx + 1, projection="3d")
+        p = decoded_np[linear_idx]
+
+        ax.scatter(
+            p[:, 0],
+            p[:, 2],
+            p[:, 1],
+            s=2,
+            c=interp_color,
+            alpha=interp_alpha,
+        )
+
+        if linear_idx in corner_linear:
+            corner_id = corner_linear[linear_idx]
+            p_anchor = anchor_np[corner_id]
+            ax.scatter(
+                p_anchor[:, 0],
+                p_anchor[:, 2],
+                p_anchor[:, 1],
+                s=2,
+                c=input_color,
+                alpha=input_alpha,
+            )
+            if has_all_ids and corner_id < len(collected_ids):
+                ax.set_title(f"ID: {collected_ids[corner_id][:8]}", fontsize=8)
+
+        ax.set_xlim(xyz_min[0], xyz_max[0])
+        ax.set_ylim(xyz_min[2], xyz_max[2])
+        ax.set_zlim(xyz_min[1], xyz_max[1])
+        ax.set_axis_off()
+        ax.set_box_aspect([1, 1, 1])
+
+    fig.suptitle(f"Latent Interpolation ({interp_mode}, grid={rows}x{cols})", fontsize=12)
+    plt.subplots_adjust(wspace=0.02, hspace=0.02, top=0.92)
     return fig
