@@ -7,6 +7,9 @@
 		{
 			"name": "weights",
 			"path": "../../../../ist-share/vision/pratchp/shapevae_weights"
+		},
+		{
+			"path": "../../../../../ist/ist-share/scads/ploy/scene2/big_file/shapenet/shapenet"
 		}
 	],
 	"settings": {
