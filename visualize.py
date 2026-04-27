@@ -151,6 +151,7 @@ def visualize_reconstructions(
     recon_color: str = "orangered",
     input_alpha: float = 0.35,
     recon_alpha: float = 0.75,
+    unnormalize: bool = False,
 ) -> None:
     fig = make_reconstruction_figure(
         model=model,
@@ -162,6 +163,7 @@ def visualize_reconstructions(
         recon_color=recon_color,
         input_alpha=input_alpha,
         recon_alpha=recon_alpha,
+        unnormalize=unnormalize,
     )
     plt.show()
 
@@ -187,6 +189,7 @@ def visualize_interpolations(
         input_alpha=input_alpha,
         interp_alpha=interp_alpha,
         title=title,
+        unnormalize=False,
     )
     plt.show()
 
