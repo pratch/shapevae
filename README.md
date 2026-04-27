@@ -12,7 +12,7 @@
 - [ ] VAE, β-VAE 
 
 ### Experiments
-- [ in progress ] Latent interpolation
+- [x] Latent interpolation
   - CLIP-guided axes?
 - [ ] Number of pointcloud samples
 - [ ] Latent sizes
