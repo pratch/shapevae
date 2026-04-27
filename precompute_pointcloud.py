@@ -7,12 +7,13 @@ import torch
 import trimesh
 
 
-def preprocess_points(points_np: np.ndarray) -> np.ndarray:
+def preprocess_points(points_np: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     points = torch.from_numpy(points_np).float()
-    points = points - points.mean(dim=0, keepdim=True)
+    centroid = points.mean(dim=0, keepdim=True)
+    points = points - centroid
     scale = points.norm(dim=1).max()
     points = points / scale
-    return points.numpy().astype(np.float32)
+    return points.numpy().astype(np.float32), centroid.squeeze(0).numpy().astype(np.float32), float(scale.item())
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,7 +28,7 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=str,
         default="./sampled_poincloud",
-        help="Output root folder for sampled point clouds",
+        help="Output root folder for sampled point clouds and normalization metadata",
     )
     parser.add_argument(
         "--object-class",
@@ -68,12 +69,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def process_one(mesh_path: str, out_path: str, obj_id: str, num_points: int) -> tuple[str, str, str]:
+def process_one(mesh_path: str, out_path: str, norm_path: str, obj_id: str, num_points: int) -> tuple[str, str, str]:
     try:
         mesh = trimesh.load(mesh_path, force="mesh")
         points, _ = trimesh.sample.sample_surface(mesh, num_points)
-        points = preprocess_points(points)
+        points, centroid, scale = preprocess_points(points)
         np.save(out_path, points)
+        np.savez_compressed(norm_path, centroid=centroid, scale=scale)
         return "saved", obj_id, ""
     except Exception as exc:
         return "failed", obj_id, str(exc)
@@ -120,17 +122,18 @@ def main() -> None:
         for obj_id in obj_ids:
             mesh_path = os.path.join(class_dir, obj_id, "models", "model_normalized.obj")
             out_path = os.path.join(output_class_dir, f"{obj_id}.npy")
+            norm_path = os.path.join(output_class_dir, f"{obj_id}.norm.npz")
 
             if not os.path.isfile(mesh_path):
                 skipped += 1
                 continue
 
-            if os.path.exists(out_path) and not args.overwrite:
+            if os.path.exists(out_path) and os.path.exists(norm_path) and not args.overwrite:
                 skipped += 1
                 continue
 
             # Keep class_id in obj label for clearer failure logs.
-            tasks.append((mesh_path, out_path, f"{class_id}/{obj_id}", args.num_points))
+            tasks.append((mesh_path, out_path, norm_path, f"{class_id}/{obj_id}", args.num_points))
 
     if len(tasks) == 0:
         print("nothing to do")
@@ -149,8 +152,8 @@ def main() -> None:
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(process_one, mesh_path, out_path, obj_id, num_points)
-            for mesh_path, out_path, obj_id, num_points in tasks
+            executor.submit(process_one, mesh_path, out_path, norm_path, obj_id, num_points)
+            for mesh_path, out_path, norm_path, obj_id, num_points in tasks
         ]
 
         for future in as_completed(futures):
