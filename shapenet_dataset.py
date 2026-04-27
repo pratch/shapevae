@@ -35,13 +35,16 @@ class ShapeNetDataset(Dataset):
             raise FileNotFoundError(f"Class directory not found: {class_dir}")
 
         self.file_paths = []
+        self.norm_paths = []
         self.object_ids = []  # for debugging
 
         for file_name in sorted(os.listdir(class_dir)):
             if file_name.endswith('.npy'):
                 obj_id = file_name[:-4]
                 path = os.path.join(class_dir, file_name)
+                norm_path = os.path.join(class_dir, f"{obj_id}.norm.npz")
                 self.file_paths.append(path)
+                self.norm_paths.append(norm_path)
                 self.object_ids.append(obj_id)
 
         if len(self.file_paths) == 0:
@@ -56,6 +59,7 @@ class ShapeNetDataset(Dataset):
 
         return {
             'points': points,  # shape (N, 3)
+            'norm_path': self.norm_paths[idx],  # loaded lazily during unnormalized plotting
             'object_id': self.object_ids[idx],  # for debugging
             'category': shapenet_id_to_category[self.object_class],  # for debugging
         }

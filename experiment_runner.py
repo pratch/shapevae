@@ -330,6 +330,21 @@ def run_training(
                     )
                     metrics["val/reconstruction"] = wandb.Image(fig, caption=f"epoch={epoch}")
                     plt.close(fig)
+
+                    fig_unnorm = make_reconstruction_figure(
+                        model=model,
+                        loader=val_loader,
+                        device=device_obj,
+                        num_batches=max(1, recon_num_batches),
+                        n_cols=max(1, recon_n_cols),
+                        max_samples=recon_max_samples,
+                        unnormalize=True,
+                    )
+                    metrics["val/reconstruction_unnorm"] = wandb.Image(
+                        fig_unnorm,
+                        caption=f"epoch={epoch}",
+                    )
+                    plt.close(fig_unnorm)
                 except Exception as exc:
                     tqdm.write(f"[{config.name}] skipped val reconstruction logging at epoch {epoch}: {exc}")
 
@@ -350,6 +365,19 @@ def run_training(
                         caption=f"epoch={epoch}, grid={interp_grid_size}x{interp_grid_size}",
                     )
                     plt.close(interp_fig)
+
+                    interp_fig_unnorm = make_interpolation_figure(
+                        model=model,
+                        loader=interp_vis_loader,
+                        device=device_obj,
+                        grid_size=interp_grid_size,
+                        unnormalize=True,
+                    )
+                    metrics["val/interpolation_unnorm"] = wandb.Image(
+                        interp_fig_unnorm,
+                        caption=f"epoch={epoch}, grid={interp_grid_size}x{interp_grid_size}",
+                    )
+                    plt.close(interp_fig_unnorm)
                 except Exception as exc:
                     tqdm.write(f"[{config.name}] skipped val interpolation logging at epoch {epoch}: {exc}")
 
