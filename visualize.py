@@ -13,34 +13,34 @@ def _to_numpy(points: torch.Tensor | np.ndarray) -> np.ndarray:
     return points
 
 
-def _unnormalize_batch_points(
-    points_np: np.ndarray,
-    centroids_np: np.ndarray,
-    scales_np: np.ndarray,
-) -> np.ndarray:
-    scales = scales_np.reshape(-1, 1, 1)
-    centroids = centroids_np.reshape(-1, 1, 3)
-    return points_np * scales + centroids
+# def _unnormalize_batch_points(
+#     points_np: np.ndarray,
+#     centroids_np: np.ndarray,
+#     scales_np: np.ndarray,
+# ) -> np.ndarray:
+#     scales = scales_np.reshape(-1, 1, 1)
+#     centroids = centroids_np.reshape(-1, 1, 3)
+#     return points_np * scales + centroids
 
 
-def _load_norm_params_for_paths(norm_paths: Sequence[str]) -> Tuple[np.ndarray, np.ndarray]:
-    n = len(norm_paths)
-    centroids = np.zeros((n, 3), dtype=np.float32)
-    scales = np.ones((n,), dtype=np.float32)
-
-    for i, norm_path in enumerate(norm_paths):
-        if not norm_path or not os.path.isfile(norm_path):
-            continue
-        try:
-            with np.load(norm_path) as norm_payload:
-                centroids[i] = norm_payload["centroid"].astype(np.float32)
-                scales[i] = np.float32(norm_payload["scale"])
-        except Exception:
-            # Fallback to identity unnormalization for missing/corrupt files.
-            centroids[i] = np.zeros((3,), dtype=np.float32)
-            scales[i] = np.float32(1.0)
-
-    return centroids, scales
+# def _load_norm_params_for_paths(norm_paths: Sequence[str]) -> Tuple[np.ndarray, np.ndarray]:
+#     n = len(norm_paths)
+#     centroids = np.zeros((n, 3), dtype=np.float32)
+#     scales = np.ones((n,), dtype=np.float32)
+#
+#     for i, norm_path in enumerate(norm_paths):
+#         if not norm_path or not os.path.isfile(norm_path):
+#             continue
+#         try:
+#             with np.load(norm_path) as norm_payload:
+#                 centroids[i] = norm_payload["centroid"].astype(np.float32)
+#                 scales[i] = np.float32(norm_payload["scale"])
+#         except Exception:
+#             # Fallback to identity unnormalization for missing/corrupt files.
+#             centroids[i] = np.zeros((3,), dtype=np.float32)
+#             scales[i] = np.float32(1.0)
+#
+#     return centroids, scales
 
 
 def _encode_points(model: torch.nn.Module, points: torch.Tensor) -> torch.Tensor:
@@ -151,7 +151,6 @@ def visualize_reconstructions(
     recon_color: str = "orangered",
     input_alpha: float = 0.35,
     recon_alpha: float = 0.75,
-    unnormalize: bool = False,
 ) -> None:
     fig = make_reconstruction_figure(
         model=model,
@@ -163,7 +162,6 @@ def visualize_reconstructions(
         recon_color=recon_color,
         input_alpha=input_alpha,
         recon_alpha=recon_alpha,
-        unnormalize=unnormalize,
     )
     plt.show()
 
@@ -189,7 +187,6 @@ def visualize_interpolations(
         input_alpha=input_alpha,
         interp_alpha=interp_alpha,
         title=title,
-        unnormalize=False,
     )
     plt.show()
 
@@ -205,7 +202,6 @@ def make_reconstruction_figure(
     input_alpha: float = 0.35,
     recon_alpha: float = 0.75,
     max_samples: int | None = None,
-    unnormalize: bool = False,
 ):
     if num_batches < 1:
         raise ValueError("num_batches must be >= 1")
@@ -213,10 +209,8 @@ def make_reconstruction_figure(
         raise ValueError("n_cols must be >= 1")
 
     collected_points: List[torch.Tensor] = []
-    collected_norm_paths: List[str] = []
     collected_ids: List[str] = []
     has_all_ids = True
-    has_all_norm_paths = True
 
     loader_iter = iter(loader)
     for _ in range(num_batches):
@@ -226,11 +220,6 @@ def make_reconstruction_figure(
             break
 
         collected_points.append(batch["points"])
-        if "norm_path" in batch:
-            collected_norm_paths.extend([str(x) for x in batch["norm_path"]])
-        else:
-            has_all_norm_paths = False
-
         if "object_id" in batch:
             collected_ids.extend([str(x) for x in batch["object_id"]])
         else:
@@ -256,16 +245,15 @@ def make_reconstruction_figure(
 
     points_np = points_np[:n_show]
     recon_np = recon_np[:n_show]
-    if unnormalize and has_all_norm_paths and collected_norm_paths:
-        show_norm_paths = collected_norm_paths[:n_show]
-        centroids_np, scales_np = _load_norm_params_for_paths(show_norm_paths)
-        points_np = _unnormalize_batch_points(points_np, centroids_np, scales_np)
-        recon_np = _unnormalize_batch_points(recon_np, centroids_np, scales_np)
 
     if has_all_ids:
         collected_ids = collected_ids[:n_show]
 
     n_rows = math.ceil(n_show / n_cols)
+
+    batch_points = np.concatenate([points_np, recon_np], axis=0)
+    batch_xmin, batch_ymin, batch_zmin = batch_points.min(axis=(0, 1))
+    batch_xmax, batch_ymax, batch_zmax = batch_points.max(axis=(0, 1))
 
     fig = plt.figure(figsize=(3.2 * n_cols, 3.0 * n_rows))
     fig.patch.set_facecolor("white")
@@ -275,13 +263,9 @@ def make_reconstruction_figure(
         p_in = points_np[i]
         p_out = recon_np[i]
 
-        # set axis limits to be based on gt points
-        xmin, ymin, zmin = p_in.min(axis=0)
-        xmax, ymax, zmax = p_in.max(axis=0)
-
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(zmin, zmax)  # because y-axis uses p[:, 2]
-        ax.set_zlim(ymin, ymax)  # because z-axis uses p[:, 1]
+        ax.set_xlim(batch_xmin, batch_xmax)
+        ax.set_ylim(batch_zmin, batch_zmax)  # because y-axis uses p[:, 2]
+        ax.set_zlim(batch_ymin, batch_ymax)  # because z-axis uses p[:, 1]
 
         ax.scatter(
             p_in[:, 0],
@@ -324,7 +308,6 @@ def make_interpolation_figure(
     input_alpha: float = 0.85,
     interp_alpha: float = 0.85,
     title: str | None = None,
-    unnormalize: bool = False,
 ):
     if isinstance(grid_size, int):
         rows = cols = grid_size
@@ -336,10 +319,8 @@ def make_interpolation_figure(
 
     device_obj = torch.device(device)
     collected_points: List[torch.Tensor] = []
-    collected_norm_paths: List[str] = []
     collected_ids: List[str] = []
     has_all_ids = True
-    has_all_norm_paths = True
 
     loader_iter = iter(loader)
     while sum(x.shape[0] for x in collected_points) < 4:
@@ -355,11 +336,6 @@ def make_interpolation_figure(
             break
 
         collected_points.append(pts[:take])
-        if "norm_path" in batch:
-            collected_norm_paths.extend([str(x) for x in batch["norm_path"][:take]])
-        else:
-            has_all_norm_paths = False
-
         if "object_id" in batch:
             collected_ids.extend([str(x) for x in batch["object_id"][:take]])
         else:
@@ -386,37 +362,6 @@ def make_interpolation_figure(
 
     decoded_np = decoded_grid.detach().cpu().numpy()
     anchor_np = anchor_points.detach().cpu().numpy()
-
-    if unnormalize and has_all_norm_paths and collected_norm_paths:
-        anchor_norm_paths = collected_norm_paths[:4]
-        anchor_centroids_np, anchor_scales_np = _load_norm_params_for_paths(anchor_norm_paths)
-        anchor_centroids = torch.from_numpy(anchor_centroids_np).to(device_obj)
-        anchor_scales = torch.from_numpy(anchor_scales_np).to(device_obj)
-
-        centroid_grid = _build_2d_latent_grid(
-            z00=anchor_centroids[0],
-            z10=anchor_centroids[1],
-            z01=anchor_centroids[2],
-            z11=anchor_centroids[3],
-            rows=rows,
-            cols=cols,
-            device=device_obj,
-        )
-        scale_grid = _build_2d_latent_grid(
-            z00=anchor_scales[0].view(1),
-            z10=anchor_scales[1].view(1),
-            z01=anchor_scales[2].view(1),
-            z11=anchor_scales[3].view(1),
-            rows=rows,
-            cols=cols,
-            device=device_obj,
-        ).squeeze(-1)
-
-        centroid_grid_np = centroid_grid.detach().cpu().numpy().astype(np.float32)
-        scale_grid_np = scale_grid.detach().cpu().numpy().astype(np.float32)
-        decoded_np = _unnormalize_batch_points(decoded_np, centroid_grid_np, scale_grid_np)
-
-        anchor_np = _unnormalize_batch_points(anchor_np, anchor_centroids_np, anchor_scales_np)
 
     corner_indices = {
         0: (0, 0),
