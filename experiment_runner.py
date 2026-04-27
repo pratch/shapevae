@@ -174,6 +174,7 @@ def init_wandb(config: ExperimentConfig):
 
     try:
         run = wandb.init(
+            entity="alephnir-vistec",
             project="shapevae",
             name=config.name,
             config=asdict(config),
