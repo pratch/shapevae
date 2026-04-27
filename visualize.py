@@ -144,6 +144,7 @@ def visualize_interpolations(
     interp_color: str = "orangered",
     input_alpha: float = 0.85,
     interp_alpha: float = 0.85,
+    title: str | None = None,
 ) -> None:
     fig = make_interpolation_figure(
         model=model,
@@ -154,6 +155,7 @@ def visualize_interpolations(
         interp_color=interp_color,
         input_alpha=input_alpha,
         interp_alpha=interp_alpha,
+        title=title,
     )
     plt.show()
 
@@ -273,6 +275,7 @@ def make_interpolation_figure(
     interp_color: str = "orangered",
     input_alpha: float = 0.85,
     interp_alpha: float = 0.85,
+    title: str | None = None,
 ):
     if isinstance(grid_size, int):
         rows = cols = grid_size
@@ -376,6 +379,6 @@ def make_interpolation_figure(
         ax.set_axis_off()
         ax.set_box_aspect([1, 1, 1])
 
-    fig.suptitle(f"Latent Interpolation (grid={rows}x{cols})", fontsize=12)
+    fig.suptitle(f"Latent Interpolation (grid={rows}x{cols})"+(f" - {title}" if title else ""), fontsize=12)
     plt.subplots_adjust(wspace=0.02, hspace=0.02, top=0.92)
     return fig

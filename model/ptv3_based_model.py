@@ -164,3 +164,36 @@ class PointVAE(nn.Module):
             "mu": mu,
             "logvar": logvar,
         }
+
+def check_voxel_collisions(pts, grid_size):
+    grid_coord = torch.div(
+        pts - pts.min(dim=0).values,
+        grid_size,
+        rounding_mode="trunc"
+    ).int()
+
+    unique_voxels, counts = torch.unique(grid_coord, dim=0, return_counts=True)
+
+    num_points = pts.shape[0]
+    num_unique = unique_voxels.shape[0]
+    num_collided_points = counts[counts > 1].sum().item()
+    num_collision_voxels = (counts > 1).sum().item()
+    max_points_in_one_voxel = counts.max().item()
+
+    # print(f"N points                : {num_points}")
+    # print(f"Unique voxels           : {num_unique}")
+    # print(f"Collision voxels        : {num_collision_voxels}")
+    # print(f"Points in collided bins : {num_collided_points}")
+    # print(f"Max points in one voxel : {max_points_in_one_voxel}")
+    # print(f"Voxel occupancy ratio   : {num_unique / num_points:.4f}")
+
+    return {
+        "grid_coord": grid_coord,
+        "counts": counts,
+        "num_points": num_points,
+        "num_unique": num_unique,
+        "collision_voxels": num_collision_voxels,
+        "collided_points": num_collided_points,
+        "max_points_in_one_voxel": max_points_in_one_voxel,
+        "occupancy_ratio": num_unique / num_points,
+    }
