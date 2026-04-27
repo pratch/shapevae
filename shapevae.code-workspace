@@ -1,7 +1,7 @@
 {
 	"folders": [
 		{
-			"name": "project",
+			"name": "shapevae",
 			"path": "."
 		},
 		{
@@ -15,7 +15,7 @@
 	"settings": {
 		"python-envs.defaultEnvManager": "ms-python.python:conda",
 		"python-envs.defaultPackageManager": "ms-python.python:conda",
-		"terminal.integrated.cwd": "${workspaceFolder:project}",
+		"terminal.integrated.cwd": "${workspaceFolder:shapevae}",
 		
 		"python.defaultInterpreterPath": "/ist-nas/users/pratchp/conda_envs/pyt3d/bin/python"
 	}
