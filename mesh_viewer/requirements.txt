@@ -1,0 +1,9 @@
+streamlit
+vtk
+stpyvista
+pyvista[jupyter]
+trame 
+trame-vtk 
+trame-client 
+trame-server 
+trame-components
