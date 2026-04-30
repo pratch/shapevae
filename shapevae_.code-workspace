@@ -10,6 +10,9 @@
 		},
 		{
 			"path": "/ist/ist-share/scads/ploy/scene2/big_file/shapenet/shapenet"
+		},
+		{
+			"path": "sampled_poincloud_clip"
 		}
 	],
 	"settings": {
@@ -17,7 +20,7 @@
 		"python-envs.defaultPackageManager": "ms-python.python:conda",
 		"terminal.integrated.cwd": "${workspaceFolder:shapevae}",
 		"python.defaultInterpreterPath": "/ist-nas/users/palakonk/singularity/home/palakons/.conda/envs/pro_pt3d/bin/python",
-		"jupyter.jupyterServerURI": "http://127.0.0.1:8889/lab?token=<>",
+		"jupyter.jupyterServerURI": "http://127.0.0.1:8889/lab?token=0fd4bb1eb8fb81943476de453732cb77b3f5499f6b446503",
 		"jupyter.jupyterServerType": "remote",
 		"python.condaPath": "/home/palakons/miniconda3/condabin/conda"
 	}

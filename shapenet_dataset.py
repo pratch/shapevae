@@ -24,8 +24,9 @@ shapenet_id_to_category = {
     "04401088": "telephone",
 }
 
+
 class ShapeNetDataset(Dataset):
-    def __init__(self, data_dir, object_class='03001627'):
+    def __init__(self, data_dir, object_class="03001627"):
         super().__init__()
         self.data_dir = data_dir
         self.object_class = object_class
@@ -36,15 +37,18 @@ class ShapeNetDataset(Dataset):
 
         self.file_paths = []
         self.norm_paths = []
+        self.clip_paths = []
         self.object_ids = []  # for debugging
 
         for file_name in sorted(os.listdir(class_dir)):
-            if file_name.endswith('.npy'):
+            if file_name.endswith(".npy"):
                 obj_id = file_name[:-4]
                 path = os.path.join(class_dir, file_name)
                 norm_path = os.path.join(class_dir, f"{obj_id}.norm.npz")
+                clip_path = os.path.join(class_dir, f"{obj_id}.clip.npz")
                 self.file_paths.append(path)
                 self.norm_paths.append(norm_path)
+                self.clip_paths.append(clip_path)
                 self.object_ids.append(obj_id)
 
         if len(self.file_paths) == 0:
@@ -56,21 +60,36 @@ class ShapeNetDataset(Dataset):
     def __getitem__(self, idx):
         points = np.load(self.file_paths[idx]).astype(np.float32)
         points = torch.from_numpy(points)  # shape (N, 3)
+        clip_path = self.clip_paths[idx]
 
-        return {
-            'points': points,  # shape (N, 3)
-            'norm_path': self.norm_paths[idx],  # loaded lazily during unnormalized plotting
-            'object_id': self.object_ids[idx],  # for debugging
-            'category': shapenet_id_to_category[self.object_class],  # for debugging
+        output = {
+            "points": points,  # shape (N, 3)
+            "norm_path": self.norm_paths[
+                idx
+            ],  # loaded lazily during unnormalized plotting
+            "object_id": self.object_ids[idx],  # for debugging
+            "category": shapenet_id_to_category[self.object_class],  # for debugging
         }
+        if os.path.exists(clip_path):
+            clip_latent = np.load(self.clip_paths[idx])['mean'].astype(np.float32)
+            output.update(
+                {
+                    "clip_path": self.clip_paths[
+                        idx
+                    ],  # for loading CLIP embeddings during training
+                    "clip_latent": clip_latent
+                }
+            )
+        return output
+
 
 # unit test
-if __name__ == '__main__':
-    dataset = ShapeNetDataset(data_dir='./sampled_poincloud', object_class='03001627')
+if __name__ == "__main__":
+    dataset = ShapeNetDataset(data_dir="./sampled_poincloud", object_class="03001627")
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
 
     for batch in dataloader:
-        print(batch['points'].shape)  # should be (2, 1024, 3)
-        print(batch['object_id'])  # for debugging
-        print(batch['category'])  # for debugging
+        print(batch["points"].shape)  # should be (2, 1024, 3)
+        print(batch["object_id"])  # for debugging
+        print(batch["category"])  # for debugging
         break
