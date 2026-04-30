@@ -9,6 +9,8 @@ import trimesh
 import io
 from typing import List
 
+from pyt3d_renderer import render_mesh_views
+
 
 def preprocess_points(points_np: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     points = torch.from_numpy(points_np).float()
@@ -154,6 +156,13 @@ def parse_args() -> argparse.Namespace:
         help="Number of rendered views to produce per point cloud (0 to disable)",
     )
     parser.add_argument(
+        "--render-mode",
+        type=str,
+        choices=["pointcloud", "mesh"],
+        default="pointcloud",
+        help="Render mode for views: pointcloud (matplotlib) or mesh (PyTorch3D)",
+    )
+    parser.add_argument(
         "--image-size",
         type=int,
         default=224,
@@ -186,6 +195,7 @@ def process_one(
     obj_id: str,
     num_points: int,
     render_views: int = 0,
+    render_mode: str = "pointcloud",
     compute_clip: bool = False,
     clip_model: str = "ViT-B/32",
     image_size: int = 224,
@@ -201,7 +211,15 @@ def process_one(
         # Optional: render views and compute CLIP embeddings
         if render_views and render_views > 0:
             try:
-                images = render_pointcloud_views(points, render_views, image_size)
+                if render_mode == "mesh":
+                    images = render_mesh_views(
+                        mesh_path,
+                        render_views,
+                        image_size=image_size,
+                        device=device,
+                    )
+                else:
+                    images = render_pointcloud_views(points, render_views, image_size)
             except Exception as exc:
                 return "failed", obj_id, f"render_failed:{exc}"
 
@@ -295,6 +313,7 @@ def main() -> None:
                     f"{class_id}/{obj_id}",
                     args.num_points,
                     args.render_views,
+                    args.render_mode,
                     args.compute_clip,
                     args.clip_model,
                     args.image_size,
@@ -335,12 +354,13 @@ def main() -> None:
                 obj_id,
                 num_points,
                 render_views,
+                render_mode,
                 compute_clip,
                 clip_model,
                 image_size,
                 device,
             )
-            for mesh_path, out_path, norm_path, obj_id, num_points, render_views, compute_clip, clip_model, image_size, device in tasks
+            for mesh_path, out_path, norm_path, obj_id, num_points, render_views, render_mode, compute_clip, clip_model, image_size, device in tasks
         ]
 
         for future in as_completed(futures):
