@@ -107,6 +107,7 @@ def plot_pointclouds(
     point_size: float = 2,
     color: str = "dodgerblue",
     alpha: float = 0.8,
+    truncate_length: int =12,
 ) -> None:
     n = len(pc_list)
     if n == 0:
@@ -128,7 +129,7 @@ def plot_pointclouds(
             c=color,
             alpha=alpha,
         )
-        ax.set_title(f"ID: {str(model_id)[:8]}", fontsize=8)
+        ax.set_title(f"{str(model_id)[:truncate_length]}", fontsize=8)
         ax.set_axis_off()
         ax.set_box_aspect([1, 1, 1])
 
