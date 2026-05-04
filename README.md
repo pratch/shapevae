@@ -18,6 +18,11 @@
 - [ ] Latent sizes
 
 ### Demo
+- [ ] Final Web Demo
+  - [ ] Text-based Shape Query
+  - [ ] Pointcloud/Mesh-based Shape Query
+  - [ ] Interpolation
+  - [ ] Shape Attribute Extrapolation (e.g. increase spikiness) 
 - [ ] CLIP-aligned latent adapter
    - [x] Update `precompute_pointcloud` and `shapenet_dataset` to precompute and present the [5 rendered views, CLIP embeddings of rendered views, point cloud] for each shape in the dataset (add falgs render-views, image-size, compute-clip, clip-model, device)
      - [x] output to `*.clip.npz` files as tenor of shape (render_views, 512) 
