@@ -13,6 +13,9 @@
 		},
 		{
 			"path": "sampled_poincloud_clip"
+		},
+		{
+			"path": "/ist-nas/ist-share/vision/pratchp/shapevae_preprocessed"
 		}
 	],
 	"settings": {
