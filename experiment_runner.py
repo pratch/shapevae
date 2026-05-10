@@ -80,6 +80,7 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         with torch.amp.autocast(device_type="cuda", enabled=use_amp):
+            print(f"shape of points: {points.shape}")
             recon, _ = model(points)
             loss = loss_fn(recon, points)
 
@@ -193,7 +194,7 @@ def run_training(
     train_loader: DataLoader,
     val_loader: DataLoader,
     device: Optional[str] = None,
-) -> Tuple[Path, Dict[str, float]]:
+) -> Tuple[Path, Dict[str, float], Optional[str]]:
     set_seed(config.seed)
 
     if device is None:
@@ -378,13 +379,15 @@ def run_training(
         }
         save_json(run_dir / "summary.json", summary)
 
+        run_id = None
         if wandb_run is not None:
             wandb_run.summary["best_val"] = best_val
             wandb_run.summary["best_epoch"] = best_epoch
             #log run_dir in W&B summary for easy access
             wandb_run.summary["run_dir"] = str(run_dir)
+            run_id = wandb_run.id
 
-        return run_dir, summary
+        return run_dir, summary, run_id
     finally:
         if global_pbar is not None:
             global_pbar.close()

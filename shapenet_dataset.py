@@ -8,20 +8,58 @@ from torch.utils.data import Dataset, DataLoader
 #   ├── object_class/ (e.g. 03001627)
 #   │   ├── object_id.npy
 
-shapenet_id_to_category = {
-    "02691156": "airplane",
-    "02933112": "cabinet",
-    "03001627": "chair",
-    "03636649": "lamp",
-    "04090263": "rifle",
+shapenet_id_to_category = {#https://gist.githubusercontent.com/tejaskhot/15ae62827d6e43b91a4b0c5c850c168e/raw/5064af3603d509b79229f6931998d4e197575ad3/shapenet_synset_list
     "04379243": "table",
-    "04530566": "watercraft",
-    "02828884": "bench",
+    "03593526": "jar",
+    "04225987": "skateboard",
     "02958343": "car",
-    "03211117": "display",
-    "03691459": "speaker",
+    "02876657": "bottle",
+    "04460130": "tower",
+    "03001627": "chair",
+    "02871439": "bookshelf",
+    "02942699": "camera",
+    "02691156": "airplane",
+    "03642806": "laptop",
+    "02801938": "basket",
     "04256520": "sofa",
+    "03624134": "knife",
+    "02946921": "can",
+    "04090263": "rifle",
+    "04468005": "train",
+    "03938244": "pillow",
+    "03636649": "lamp",
+    "02747177": "trash bin",
+    "03710193": "mailbox",
+    "04530566": "watercraft",
+    "03790512": "motorbike",
+    "03207941": "dishwasher",
+    "02828884": "bench",
+    "03948459": "pistol",
+    "04099429": "rocket",
+    "03691459": "loudspeaker",
+    "03337140": "file cabinet",
+    "02773838": "bag",
+    "02933112": "cabinet",
+    "02818832": "bed",
+    "02843684": "birdhouse",
+    "03211117": "display",
+    "03928116": "piano",
+    "03261776": "earphone",
     "04401088": "telephone",
+    "04330267": "stove",
+    "03759954": "microphone",
+    "02924116": "bus",
+    "03797390": "mug",
+    "04074963": "remote",
+    "02808440": "bathtub",
+    "02880940": "bowl",
+    "03085013": "keyboard",
+    "03467517": "guitar",
+    "04554684": "washer",
+    "02834778": "bicycle",
+    "03325088": "faucet",
+    "04004475": "printer",
+    "02954340": "cap"
 }
 
 
@@ -68,7 +106,7 @@ class ShapeNetDataset(Dataset):
                 idx
             ],  # loaded lazily during unnormalized plotting
             "object_id": self.object_ids[idx],  # for debugging
-            "category": shapenet_id_to_category[self.object_class],  # for debugging
+            "category": shapenet_id_to_category[self.object_class] ,  # for debugging
         }
         if os.path.exists(clip_path):
             clip_latent = np.load(self.clip_paths[idx])['mean'].astype(np.float32)
