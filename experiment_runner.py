@@ -80,7 +80,7 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         with torch.amp.autocast(device_type="cuda", enabled=use_amp):
-            print(f"shape of points: {points.shape}")
+            # print(f"shape of points: {points.shape}")
             recon, _ = model(points)
             loss = loss_fn(recon, points)
 
