@@ -47,15 +47,20 @@ def _encode_points(model: torch.nn.Module, points: torch.Tensor) -> torch.Tensor
     if hasattr(model, "encode") and callable(model.encode):
         encoded = model.encode(points)
         if isinstance(encoded, tuple):
+            print("Warning: model.encode() returned a tuple, using the first element as latent codes. Consider updating the model to return just the latent tensor for clarity.")
             return encoded[0]
+        print("Warning: model.encode() returned a non-tuple, using it directly as latent codes.")
         return encoded
 
     if hasattr(model, "encoder") and callable(model.encoder):
+        print("Warning: model has an 'encoder' method but no 'encode' method. Using 'encoder' for latent extraction. Consider updating the model to have a clear 'encode()' method for this purpose.")
         return model.encoder(points)
 
     out = model(points)
     if isinstance(out, tuple) and len(out) >= 2:
+        print("Warning: model's forward() returned a tuple, using the second element as latent codes. Consider updating the model to return (recon, latents) for clarity.")
         return out[1]
+    print("Warning: model does not have encode() or encoder(), and forward() did not return a tuple with latents. Unable to extract latent codes for interpolation visualization.")
     raise ValueError("Unable to extract latent codes from model")
 
 
@@ -349,9 +354,12 @@ def make_interpolation_figure(
 
     anchor_points = torch.cat(collected_points, dim=0)[:4].to(device_obj)
 
+
     model.eval()
     with torch.no_grad():
+        # print(f"shaep of anchor_points: {anchor_points.shape}")  # shape of anchor_points: torch.Size([4, 1024, 3]) --- IGNORE ---
         anchor_z = _encode_points(model, anchor_points)
+        # print(f"len anchor_z: {len(anchor_z)}, {anchor_z}")  # len anchor_z: 4, anchor_z shape: torch.Size([4, 64]) --- IGNORE ---
         z_grid = _build_2d_latent_grid(
             z00=anchor_z[0],
             z10=anchor_z[1],

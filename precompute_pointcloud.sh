@@ -55,3 +55,18 @@ python precompute_pointcloud.py \
   --compute-clip \
   --device cuda \
   --workers 26
+
+  python precompute_pointcloud.py \
+  --data-dir /ist/ist-share/scads/ploy/scene2/big_file/shapenet/shapenet \
+  --object-classes 03001627  04379243 \
+  --num-points 8192 \
+  --output-dir /ist-nas/ist-share/vision/pratchp/shapevae_preprocessed/sampled_pointcloud_8192pt_clipmesh_chairtable \
+  --render-views 5 \
+  --render-mode mesh \
+  --compute-clip \
+  --device cuda \
+  --workers 26
+
+
+    # "04379243": "table",
+    # "03001627": "chair",

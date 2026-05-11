@@ -45,6 +45,7 @@ class PointVAE(nn.Module):
         C = cfg.hidden_dim
         D = cfg.latent_dim
         N = cfg.num_points
+        print(f"Initializing PointVAE with config: {cfg},D: {D}, C: {C}, N: {N}")
 
         self.backbone = PointTransformerV3(
             in_channels=C,
@@ -104,7 +105,8 @@ class PointVAE(nn.Module):
         #append 0 in fornt of offset to make it [B+1], where offset[i] is the starting index of the i-th batch in the flattened point cloud.
         # offset = torch.cat([torch.tensor([0], device=device, dtype=torch.long), offset], dim=0)
         return batch, offset
-
+    def encoder(self, x: torch.Tensor):
+        return self.encode(x)
     def encode(self, x: torch.Tensor):
         """
         x: [B, N, 3]
@@ -129,29 +131,22 @@ class PointVAE(nn.Module):
             "grid_size": self.cfg.grid_size,
             "condition": self.ptv3_condition,
         }
-        print(f"shape of backbone input - coord: {backbone_input['coord'].shape}, feat: {backbone_input['feat'].shape}, batch: {backbone_input['batch'].shape}, offset: {backbone_input['offset'].shape}")  # shape of backbone input - coord: torch.Size([16384, 3]), feat: torch.Size([16384, 64]), batch: torch.Size([16384]), offset: torch.Size([16])
+        # print(f"coord_in {coord.shape}, feat_in shape: {feat.shape}, batch_in shape: {batch.shape}, offset_in shape: {offset.shape}") 
+
+        
         backbone_out = self.backbone(backbone_input)
 
         feat_out = backbone_out["feat"]  # [M, C] after PTv3 downsampling
-        batch = backbone_out["batch"]  # [M], sample index per point
-        offset = backbone_out["offset"]  # cumulative counts (kept for debugging/compat)
+        batch_out = backbone_out["batch"]  # [M], sample index per point
+        offset_out = backbone_out["offset"]  # cumulative counts (kept for debugging/compat)
+        coord_out = backbone_out["coord"]  # [M, 3] coordinates after PTv3 processing (not used for pooling, but useful for debugging and potential future use)
+        # print(f"keys in backbone_out: {backbone_out.keys()}")  # keys in backbone_out: dict_keys(['feat', 'coord', 'batch', 'offset'])
+        # print(f"coord_out {coord_out.shape}, feat_out shape: {feat_out.shape}, batch_out shape: {batch_out.shape}, offset_out shape: {offset_out.shape}") #feat_out shape: torch.Size([1024, 64]), batch shape: torch.Size([863338]), offset shape: torch.Size([1024])
+
         feat_out = self.post_backbone_norm(feat_out)
-
-        print(f"feat_out shape: {feat_out.shape}, batch shape: {batch.shape}, offset shape: {offset.shape}") #feat_out shape: torch.Size([1024, 64]), batch shape: torch.Size([863338]), offset shape: torch.Size([1024])
-        feats_list = []
-        for i in range(B):
-            mask = batch == i
-            aggreg = feat_out[mask].max(dim=0).values  # [C] #The shape of the mask [862158] at index 0 does not match the shape of the indexed tensor [1024, 64] at index 0
-            print(f"Batch {i}: num points after PTv3: {mask.sum().item()}, aggregated feat shape: {aggreg.shape}")  # Batch 0: num points after PTv3: 100, aggregated feat shape: torch.Size([64])
-            feats_list.append(aggreg)
-
-
-        pooled = torch.stack(feats_list, dim=0)  # [B, C]
-        print(f"pooled shape: {pooled.shape}")  # pooled shape: torch.Size([16, 64])
-        # Global pooling -> shape code
-        # pooled = feat_out.max(dim=1).values  # [B, C]
-        pooled = self.to_latent(pooled)  # [B, C]
-        print(f"pooled after to_latent shape: {pooled.shape}")  # pooled after to_latent shape: torch.Size([16, 64])
+        # print(f"feat_out after norm shape: {feat_out.shape}")  # feat_out after norm shape: torch.Size([1024, 64])
+        pooled = self.to_latent(feat_out)  # [B, C]
+        # print(f"pooled after to_latent shape: {pooled.shape}")  # pooled after to_latent shape: torch.Size([16, 64])
 
         if self.cfg.variational:
             mu = self.to_mu(pooled)  # [B, D]
@@ -179,8 +174,9 @@ class PointVAE(nn.Module):
         """
         returns dict for convenience in notebook usage
         """
-        z, mu, logvar = self.encode(x)
+        z, mu, logvar = self.encoder(x)
         x_hat = self.decode(z)
+        
         return x_hat, z
         return {
             "x_hat": x_hat,
@@ -251,7 +247,11 @@ def train_adaptor(  config,
             clip_latent = batch['clip_latent'].to(device)  # (B, 512)
 
             optimizer.zero_grad()
-            z = point_ae_model.encoder(points)  # (B, 1024)
+            z = point_ae_model.encode(points)  # (B, 1024)
+            # if model is PTV3-based, it may return (z, mu, logvar),  retuirn the first element as z
+            if isinstance(z, tuple):
+                z = z[0]    
+                
             pred_clip_latent = adaptor_model(z)  # (B, 512)
             loss = loss_fn(pred_clip_latent, clip_latent)
             loss.backward()
@@ -271,6 +271,8 @@ def train_adaptor(  config,
                 clip_latent = batch['clip_latent'].to(device)  # (B, 512)
 
                 z = point_ae_model.encoder(points)  # (B, 1024)
+                if isinstance(z, tuple):
+                    z = z[0]    
                 pred_clip_latent = adaptor_model(z)  # (B, 512)
                 loss = loss_fn(pred_clip_latent, clip_latent)
                 val_loss += loss.item() * points.size(0)
