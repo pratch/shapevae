@@ -334,12 +334,12 @@ def main() -> None:
     workers = max(1, args.workers)
     # If computing CLIP on CUDA, avoid multiple processes each loading the GPU model
     # which often causes OOMs and abrupt worker termination. Force single-worker in that case.
-    if args.compute_clip and args.device and args.device.startswith("cuda") and workers > 1:
-        print(
-            "warning: compute-clip with CUDA and multiple workers may crash workers (GPU OOM)."
-            " For safety, reducing workers to 1."
-        )
-        workers = 1
+    # if args.compute_clip and args.device and args.device.startswith("cuda") and workers > 1:
+    #     print(
+    #         "warning: compute-clip with CUDA and multiple workers may crash workers (GPU OOM)."
+    #         " For safety, reducing workers to 1."
+    #     )
+    #     workers = 1
     completed = 0
     print(f"classes: {', '.join(object_classes)}")
     print(f"launching {workers} workers for {len(tasks)} files")

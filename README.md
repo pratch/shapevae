@@ -44,3 +44,9 @@ dir = embed("chair with armrests") - embed("chair without armrests")
 - trained weights: /ist-nas/ist-share/vision/pratchp/shapevae_weights
 - Progress slide: https://vistec-my.sharepoint.com/:p:/g/personal/pratch_p_s24_vistec_ac_th/IQBSUouIob6rS46798wpbSBrAeBzaE6ICKUW-uoPL8Tu_rE?rtime=SPQuQH6q3kg
 - Final slide:(10 Mins presentation + 2 mins of QA)
+
+
+### TIL
+- How ot make jupyter persist
+- Precompute the dataset
+- Fast experiment itereation with small models and subset of data

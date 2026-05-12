@@ -47,20 +47,20 @@ def _encode_points(model: torch.nn.Module, points: torch.Tensor) -> torch.Tensor
     if hasattr(model, "encode") and callable(model.encode):
         encoded = model.encode(points)
         if isinstance(encoded, tuple):
-            print("Warning: model.encode() returned a tuple, using the first element as latent codes. Consider updating the model to return just the latent tensor for clarity.")
+            # print("Warning: model.encode() returned a tuple, using the first element as latent codes. Consider updating the model to return just the latent tensor for clarity.")
             return encoded[0]
-        print("Warning: model.encode() returned a non-tuple, using it directly as latent codes.")
+        # print("Warning: model.encode() returned a non-tuple, using it directly as latent codes.")
         return encoded
 
     if hasattr(model, "encoder") and callable(model.encoder):
-        print("Warning: model has an 'encoder' method but no 'encode' method. Using 'encoder' for latent extraction. Consider updating the model to have a clear 'encode()' method for this purpose.")
+        # print("Warning: model has an 'encoder' method but no 'encode' method. Using 'encoder' for latent extraction. Consider updating the model to have a clear 'encode()' method for this purpose.")
         return model.encoder(points)
 
     out = model(points)
     if isinstance(out, tuple) and len(out) >= 2:
-        print("Warning: model's forward() returned a tuple, using the second element as latent codes. Consider updating the model to return (recon, latents) for clarity.")
+        # print("Warning: model's forward() returned a tuple, using the second element as latent codes. Consider updating the model to return (recon, latents) for clarity.")
         return out[1]
-    print("Warning: model does not have encode() or encoder(), and forward() did not return a tuple with latents. Unable to extract latent codes for interpolation visualization.")
+    # print("Warning: model does not have encode() or encoder(), and forward() did not return a tuple with latents. Unable to extract latent codes for interpolation visualization.")
     raise ValueError("Unable to extract latent codes from model")
 
 
@@ -114,6 +114,7 @@ def plot_pointclouds(
     alpha: float = 0.8,
     truncate_length: int =12,
     azim : float = 45,
+    fname=None
 ) -> None:
     n = len(pc_list)
     if n == 0:
@@ -147,6 +148,9 @@ def plot_pointclouds(
 
     plt.subplots_adjust(wspace=0, hspace=0.1)
     plt.show()
+    if fname:
+        fig.savefig(fname, dpi=300, bbox_inches='tight')
+        print(f"Saved point cloud figure to {fname}")
 
 
 def visualize_reconstructions(
